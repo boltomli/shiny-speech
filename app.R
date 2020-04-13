@@ -35,28 +35,44 @@ server <- function(input, output) {
             "Microsoft" = "microsoft"
         )
     })
+    available_voices <- reactive({
+        req(service_provider())
+        if (input$key == "") {
+            if (service_provider() == "microsoft") {
+                tts_voices(service = service_provider())
+            }
+        } else {
+            if (tts_auth(service = service_provider, key_or_json_file = input$key)) {
+                tts_voices(service = service_provider())
+            }
+        }
+    })
+    available_locales <- reactive({
+        req(available_voices())
+        unique(available_voices()["language_code"])
+    })
     output$locale_selector <- renderUI({
         req(service_provider())
-        service_provider = service_provider()
+        req(available_locales())
         if (input$key == "") {
-            if (service_provider == "microsoft") {
+            if (service_provider() == "microsoft") {
                 selectInput("locale",
                             "Locale:",
-                            unique(tts_voices(service = service_provider)["language_code"]))
+                            available_locales())
             } else {
                 helpText("Follow document of each service provider for authentication method.")
             }
         } else {
-            if (tts_auth(service = service_provider, key_or_json_file = input$key)) {
+            if (tts_auth(service = service_provider(), key_or_json_file = input$key)) {
                 selectInput("locale",
                             "Locale:",
-                            unique(tts_voices(service = service_provider)["language_code"]))
+                            available_locales())
             }
         }
     })
     output$voices <- renderTable({
-        req(service_provider())
-        tts_voices(service = service_provider())
+        req(available_voices())
+        available_voices()
     })
 }
 
