@@ -16,6 +16,7 @@ ui <- fluidPage(
             textInput("key",
                       "Key for the selected service:"),
             uiOutput("locale_selector"),
+            uiOutput("voice_selector"),
             tags$hr(),
             helpText("View", a("source code on GitHub", href="https://github.com/boltomli/shiny-speech", target="_blank"))
         ),
@@ -35,6 +36,7 @@ server <- function(input, output) {
             "Microsoft" = "microsoft"
         )
     })
+
     available_voices <- reactive({
         req(service_provider())
         if (input$key == "") {
@@ -47,29 +49,27 @@ server <- function(input, output) {
             }
         }
     })
+
     available_locales <- reactive({
         req(available_voices())
         unique(available_voices()["language_code"])
     })
+
     output$locale_selector <- renderUI({
         req(service_provider())
         req(available_locales())
-        if (input$key == "") {
-            if (service_provider() == "microsoft") {
-                selectInput("locale",
-                            "Locale:",
-                            available_locales())
-            } else {
-                helpText("Follow document of each service provider for authentication method.")
-            }
-        } else {
-            if (tts_auth(service = service_provider(), key_or_json_file = input$key)) {
-                selectInput("locale",
-                            "Locale:",
-                            available_locales())
-            }
-        }
+        selectInput("locale",
+                    "Locale:",
+                    available_locales())
     })
+
+    output$voice_selector <- renderUI({
+        req(available_voices())
+        selectInput("voice",
+                    "Voice:",
+                    available_voices()[available_voices()$language_code == input$locale,"voice"])
+    })
+
     output$voices <- renderTable({
         req(available_voices())
         available_voices()
