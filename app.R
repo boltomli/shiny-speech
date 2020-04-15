@@ -1,5 +1,6 @@
 library(shiny)
 library(text2speech)
+library(XML)
 
 ui <- fluidPage(
 
@@ -101,9 +102,23 @@ server <- function(input, output) {
     })
 
     observe({
-        req(input$text, input$locale, input$voice)
+        req(input$text, input$voice)
+        voice <- available_voices()[available_voices()$voice == input$voice,]
+        name <- voice$voice
+        lang <- tolower(voice$language_code)
+        gender <- voice$gender
+        ssml <- newXMLDoc()
+        ns <- c(xml = "http://www.w3.org/2000/xmlns")
+        speak <- newXMLNode("speak", namespace = ns)
+        addAttributes(speak, "version" = "1.0", "xml:lang" = lang)
+        voice <- newXMLNode("voice", namespace = ns)
+        addAttributes(voice, "xml:lang" = lang, "xml:gender" = gender, "name" = name)
+        textNode <- newXMLTextNode(text = input$text)
+        addChildren(voice, textNode)
+        addChildren(speak, voice)
+        addChildren(ssml, speak)
         output$ssml <- renderText({
-            paste("TODO: speak ", input$text,  " with ", input$voice, " in ", input$locale)
+            toString.XMLNode(ssml)
         })
     })
 }
