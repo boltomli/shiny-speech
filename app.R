@@ -3,7 +3,7 @@ library(text2speech)
 
 ui <- fluidPage(
 
-    titlePanel("Try Text-To-Speech (TTS)"),
+    titlePanel("Try Text-To-Speech (TTS) services"),
 
     sidebarLayout(
         sidebarPanel(
@@ -13,16 +13,16 @@ ui <- fluidPage(
                           "Google",
                           "Microsoft"),
                         selected = "Microsoft"),
-            textInput("key",
-                      "Key for the selected service:"),
-            uiOutput("locale_selector"),
-            uiOutput("voice_selector"),
+            uiOutput("credential"),
             tags$hr(),
             helpText("View", a("source code on GitHub", href="https://github.com/boltomli/shiny-speech", target="_blank"))
         ),
 
         mainPanel(
-            tableOutput("voices"),
+            uiOutput("locale_selector"),
+            uiOutput("voice_selector"),
+            textInput("text", "Input text to speak"),
+            textOutput("ssml")
         )
     )
 )
@@ -37,42 +37,74 @@ server <- function(input, output) {
         )
     })
 
-    available_voices <- reactive({
-        req(service_provider())
-        if (input$key == "") {
-            if (service_provider() == "microsoft") {
-                tts_voices(service = service_provider())
-            }
-        } else {
-            if (tts_auth(service = service_provider, key_or_json_file = input$key)) {
-                tts_voices(service = service_provider())
-            }
+    output$credential <- renderUI({
+        if (service_provider() == "google") {
+            fileInput("file_json", "Upload credential JSON file")
+        } else if (service_provider() == "amazon") {
+            list(
+                textInput("key", "Enter key for authentication"),
+                actionButton("set-key", "Send key to authenticate")
+            )
         }
     })
 
+    available_voices <- reactiveVal()
+
+    # handle Amazon
+    observeEvent(input[["set-key"]], {
+        req(input$key)
+        tryCatch({
+            available_voices(tts_voices(service = "amazon", key_or_json_file = input$key))
+        }, error = function(e){
+            showNotification(as.character(safeError(e)), type = "warning")
+        })
+    })
+
+    # handle Microsoft
+    observe({
+        if (service_provider() == "microsoft") {
+            available_voices(tts_voices(service = "microsoft"))
+        }
+    })
+
+    # handle Google
+    observe({
+        req(input$file_json)
+        tryCatch({
+            available_voices(tts_voices(service = "google", key_or_json_file = input$file_json$datapath[[1]]))
+        }, error = function(e){
+            showNotification(as.character(safeError(e)), type = "warning")
+        })
+    })
+
     available_locales <- reactive({
-        req(available_voices())
         unique(available_voices()["language_code"])
     })
 
-    output$locale_selector <- renderUI({
-        req(service_provider())
-        req(available_locales())
-        selectInput("locale",
-                    "Locale:",
-                    available_locales())
+    observe({
+        available_locales <- available_locales()
+        output$locale_selector <- renderUI({
+            selectInput("locale",
+                        "Select from available locales:",
+                        available_locales$language_code)
+        })
     })
 
-    output$voice_selector <- renderUI({
-        req(available_voices())
-        selectInput("voice",
-                    "Voice:",
-                    available_voices()[available_voices()$language_code == input$locale,"voice"])
+    observe({
+        req(input$locale)
+        available_voices <- available_voices()
+        output$voice_selector <- renderUI({
+            selectInput("voice",
+                        "Select from available voices:",
+                        available_voices[available_voices$language_code == input$locale,"voice"])
+        })
     })
 
-    output$voices <- renderTable({
-        req(available_voices())
-        available_voices()
+    observe({
+        req(input$text, input$locale, input$voice)
+        output$ssml <- renderText({
+            paste("TODO: speak ", input$text,  " with ", input$voice, " in ", input$locale)
+        })
     })
 }
 
