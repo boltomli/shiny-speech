@@ -60,13 +60,6 @@ server <- function(input, output) {
         })
     })
 
-    # handle Microsoft
-    observe({
-        if (service_provider() == "microsoft") {
-            available_voices(tts_voices(service = "microsoft"))
-        }
-    })
-
     # handle Google
     observe({
         req(input$file_json)
@@ -77,6 +70,13 @@ server <- function(input, output) {
         })
     })
 
+    # handle Microsoft
+    observe({
+        if (service_provider() == "microsoft") {
+            available_voices(tts_voices(service = "microsoft"))
+        }
+    })
+    
     available_locales <- reactive({
         unique(available_voices()["language_code"])
     })
