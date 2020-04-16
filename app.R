@@ -91,7 +91,10 @@ server <- function(input, output) {
     })
     
     available_locales <- reactive({
-        unique(available_voices()["language_code"])
+        available_voices <- available_voices()
+        if (!is.null(available_voices)) {
+            unique(available_voices[order(available_voices$language_code),]["language_code"])
+        }
     })
 
     observe({
