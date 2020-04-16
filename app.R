@@ -1,6 +1,7 @@
 library(shiny)
 library(text2speech)
 library(XML)
+library(mscstts)
 
 ui <- fluidPage(
 
@@ -10,10 +11,10 @@ ui <- fluidPage(
         sidebarPanel(
             selectInput("service",
                         "Pick a service provider:",
-                        c("Amazon",
-                          "Google",
-                          "Microsoft"),
-                        selected = "Microsoft"),
+                        c("Amazon" = "amazon",
+                          "Google" = "google",
+                          "Microsoft" = "microsoft"),
+                        selected = "microsoft"),
             uiOutput("credential"),
             tags$hr(),
             helpText("View", a("source code on GitHub", href="https://github.com/boltomli/shiny-speech", target="_blank"))
@@ -30,21 +31,19 @@ ui <- fluidPage(
 
 server <- function(input, output) {
 
-    service_provider <- reactive({
-        switch (input$service,
-            "Amazon" = "amazon",
-            "Google" = "google",
-            "Microsoft" = "microsoft"
-        )
-    })
-
     output$credential <- renderUI({
-        if (service_provider() == "google") {
-            fileInput("file_json", "Upload credential JSON file")
-        } else if (service_provider() == "amazon") {
+        if (input$service == "amazon") {
             list(
                 textInput("key", "Enter key for authentication"),
                 actionButton("set-key", "Send key to authenticate")
+            )
+        } else if (input$service == "google") {
+            fileInput("file_json", "Upload credential JSON file")
+        } else if (input$service == "microsoft") {
+            list(
+                selectInput("region", "Select a Microsoft Azure region", ms_regions()),
+                textInput("key", "Enter key for the selected region"),
+                actionButton("set-key-region", "Send key to authenticate")
             )
         }
     })
@@ -72,9 +71,22 @@ server <- function(input, output) {
     })
 
     # handle Microsoft
-    observe({
-        if (service_provider() == "microsoft") {
+    observeEvent(input[["set-key-region"]], {
+        req(input$region)
+        if (input$key == "") {
             available_voices(tts_voices(service = "microsoft"))
+        } else {
+            tryCatch({
+                voices <- ms_list_voices(api_key = input$key, region = input$region)
+                names(voices)[names(voices) == "ShortName"] <- "voice"
+                names(voices)[names(voices) == "Locale"] <- "language_code"
+                names(voices)[names(voices) == "Gender"] <- "gender"
+                voices = voices[, c("voice", "language_code", "gender")]
+                voices$service = "microsoft"
+                available_voices(voices)
+            }, error = function(e){
+                showNotification(as.character(safeError(e)), type = "warning")
+            })
         }
     })
     
