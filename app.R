@@ -2,6 +2,7 @@ library(shiny)
 library(text2speech)
 library(XML)
 library(mscstts)
+library(aws.polly)
 
 ui <- fluidPage(
 
@@ -34,7 +35,8 @@ server <- function(input, output) {
     output$credential <- renderUI({
         if (input$service == "amazon") {
             list(
-                textInput("key", "Enter key for authentication"),
+                textInput("key", "Enter access key ID"),
+                textInput("secret", "Enter secret access key"),
                 actionButton("set-key", "Send key to authenticate")
             )
         } else if (input$service == "google") {
@@ -52,9 +54,15 @@ server <- function(input, output) {
 
     # handle Amazon
     observeEvent(input[["set-key"]], {
-        req(input$key)
+        req(input$key, input$secret)
         tryCatch({
-            available_voices(tts_voices(service = "amazon", key_or_json_file = input$key))
+            voices <- pollyHTTP("voices", key = input$key, secret = input$secret)$Voices
+            names(voices)[names(voices) == "Name"] <- "voice"
+            names(voices)[names(voices) == "LanguageCode"] <- "language_code"
+            names(voices)[names(voices) == "Gender"] <- "gender"
+            voices = voices[, c("voice", "language_code", "gender")]
+            voices$service = "amazon"
+            available_voices(voices)
         }, error = function(e){
             showNotification(as.character(safeError(e)), type = "warning")
         })
