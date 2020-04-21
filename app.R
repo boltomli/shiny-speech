@@ -25,7 +25,8 @@ ui <- fluidPage(
             uiOutput("locale_selector"),
             uiOutput("voice_selector"),
             textInput("text", "Input text to speak"),
-            textOutput("ssml")
+            textOutput("ssml"),
+            uiOutput("audio")
         )
     )
 )
@@ -86,7 +87,7 @@ server <- function(input, output) {
         } else {
             tryCatch({
                 voices <- ms_list_voices(api_key = input$key, region = input$region)
-                names(voices)[names(voices) == "ShortName"] <- "voice"
+                names(voices)[names(voices) == "Name"] <- "voice" # ShortName is not well supported yet in mscstts package
                 names(voices)[names(voices) == "Locale"] <- "language_code"
                 names(voices)[names(voices) == "Gender"] <- "gender"
                 voices = voices[, c("voice", "language_code", "gender")]
@@ -142,6 +143,37 @@ server <- function(input, output) {
         addChildren(ssml, speak)
         output$ssml <- renderText({
             toString.XMLNode(ssml)
+        })
+    })
+
+    # handle speak
+    observe({
+        req(input$text, input$voice)
+        tryCatch({
+            if (input$service == "amazon") {
+                req(input$key, input$secret)
+                tts_amazon_auth(key = input$key, secret = input$secret)
+                res <- tts(input$text, output_format = "wav", voice = input$voice, service = input$service)
+            } else if (input$service == "google") {
+                req(input$file_json)
+                tts_google_auth(key_or_json_file = input$file_json$datapath[[1]])
+                res <- tts(input$text, output_format = "wav", voice = input$voice, service = input$service)
+            } else if (input$service == "microsoft") {
+                req(input$region, input$key)
+                voice <- available_voices()[available_voices()$voice == input$voice,]
+                res <- ms_synthesize(input$text,
+                                     gender = voice$gender,
+                                     language = voice$language_code,
+                                     voice = voice$voice,
+                                     api_key = input$key, region = input$region,
+                                     output_format = "riff-24khz-16bit-mono-pcm")$content
+            }
+            wavfile <- file("www/temp.wav", "wb")
+            writeBin(con = wavfile, object = res)
+            close(wavfile)
+            output$audio <- renderUI({tags$audio(src = 'temp.wav', type ="audio/wav", controls = T, autoplay = F)})
+        }, error = function(e){
+            showNotification(as.character(safeError(e)), type = "warning")
         })
     })
 }
